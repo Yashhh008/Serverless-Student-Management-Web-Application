@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Management</title>
+  <style>
+    :root { font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif; color: #182230; background: #f4f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: #172554; color: white; padding: 26px 20px; }
+    header .wrap, main { max-width: 1100px; margin: auto; }
+    h1 { margin: 0 0 6px; font-size: clamp(1.5rem, 3vw, 2.1rem); }
+    header p { margin: 0; color: #dbeafe; }
+    main { padding: 24px 16px 48px; }
+    .config, .panel { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 18px; box-shadow: 0 4px 16px rgba(15,23,42,.04); }
+    h2 { margin: 0 0 16px; font-size: 1.15rem; }
+    label { display: block; font-size: .9rem; font-weight: 650; margin-bottom: 6px; }
+    input { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; background: white; }
+    input:focus { outline: 3px solid #bfdbfe; border-color: #2563eb; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .field { margin-bottom: 14px; }
+    button { border: 0; border-radius: 8px; padding: 11px 15px; font: inherit; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .primary { color: white; background: #2563eb; }
+    .secondary { color: #1e293b; background: #e2e8f0; }
+    .danger { color: white; background: #dc2626; padding: 7px 10px; font-size: .86rem; }
+    .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
+    .toolbar .field { flex: 1; min-width: 220px; margin: 0; }
+    .message { display: none; padding: 12px 14px; border-radius: 8px; margin-bottom: 16px; overflow-wrap: anywhere; }
+    .message.show { display: block; }
+    .message.ok { background: #dcfce7; color: #166534; }
+    .message.error { background: #fee2e2; color: #991b1b; }
+    .status { color: #64748b; font-size: .9rem; margin: 8px 0 0; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 650px; }
+    th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #e2e8f0; }
+    th { color: #475569; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+    .empty { color: #64748b; padding: 22px 8px; text-align: center; }
+    .badge { display: inline-block; background: #dbeafe; color: #1d4ed8; padding: 4px 8px; border-radius: 999px; font-size: .8rem; }
+    @media (max-width: 650px) { .grid { grid-template-columns: 1fr; gap: 0; } main { padding: 16px 10px 32px; } .panel, .config { padding: 15px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Student Management</h1>
+      <p>A serverless web application powered by AWS Lambda, API Gateway and DynamoDB.</p>
+    </div>
+  </header>
+  <main>
+    <section class="config">
+      <h2>API Configuration</h2>
+      <div class="field">
+        <label for="apiUrl">API Gateway Invoke URL</label>
+        <input id="apiUrl" type="url" placeholder="https://your-api-id.execute-api.ap-south-1.amazonaws.com" autocomplete="url">
+      </div>
+      <button id="saveUrl" class="secondary" type="button">Use this API URL</button>
+      <p class="status">Paste your real Invoke URL from API Gateway. Do not add <code>/students</code> at the end.</p>
+    </section>
+
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+
+    <section class="panel">
+      <h2>Add a student</h2>
+      <form id="studentForm">
+        <div class="grid">
+          <div class="field">
+            <label for="studentId">Student ID</label>
+            <input id="studentId" name="studentId" required maxlength="60" placeholder="e.g. STU003">
+          </div>
+          <div class="field">
+            <label for="name">Full name</label>
+            <input id="name" name="name" required maxlength="100" placeholder="e.g. Asha Kumar">
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required maxlength="150" placeholder="e.g. asha@example.com">
+          </div>
+          <div class="field">
+            <label for="course">Course</label>
+            <input id="course" name="course" required maxlength="100" placeholder="e.g. CSE-AIML">
+          </div>
+        </div>
+        <button id="addButton" class="primary" type="submit">Add student</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <div style="flex:1">
+          <h2 style="margin-bottom:5px">Students</h2>
+          <span class="status" id="count">Not loaded yet</span>
+        </div>
+        <button id="refreshButton" class="secondary" type="button">Refresh list</button>
+      </div>
+      <div class="toolbar">
+        <div class="field">
+          <label for="searchId">Find by student ID</label>
+          <input id="searchId" placeholder="Enter an exact ID, e.g. STU003">
+        </div>
+        <button id="searchButton" class="secondary" type="button">Search</button>
+        <button id="showAllButton" class="secondary" type="button">Show all</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Student ID</th><th>Name</th><th>Email</th><th>Course</th><th>Action</th></tr></thead>
+          <tbody id="studentRows"><tr><td colspan="5" class="empty">Configure your API URL, then refresh the list.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const apiInput = document.getElementById("apiUrl");
+    const messageBox = document.getElementById("message");
+    const rows = document.getElementById("studentRows");
+    const count = document.getElementById("count");
+    let apiBase = "";
+
+    function showMessage(text, type = "ok") {
+      messageBox.textContent = text;
+      messageBox.className = `message show ${type}`;
+    }
+    function clearMessage() {
+      messageBox.textContent = "";
+      messageBox.className = "message";
+    }
+    function getUrl(path) {
+      if (!apiBase) throw new Error("Paste your API Gateway Invoke URL and click Use this API URL first.");
+      return apiBase + path;
+    }
+    async function request(path, options = {}) {
+      const res = await fetch(getUrl(path), options);
+      const raw = await res.text();
+      let data = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { data = { message: raw }; }
+      if (!res.ok) throw new Error(data.error || data.message || `Request failed with HTTP ${res.status}`);
+      return data;
+    }
+    function safeText(value) {
+      const span = document.createElement("span");
+      span.textContent = value == null ? "" : String(value);
+      return span;
+    }
+    function renderStudents(students) {
+      rows.replaceChildren();
+      count.textContent = `${students.length} student${students.length === 1 ? "" : "s"} shown`;
+      if (!students.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.className = "empty";
+        td.textContent = "No students found.";
+        tr.appendChild(td);
+        rows.appendChild(tr);
+        return;
+      }
+      students.sort((a, b) => String(a.studentId).localeCompare(String(b.studentId)));
+      for (const student of students) {
+        const tr = document.createElement("tr");
+        for (const key of ["studentId", "name", "email", "course"]) {
+          const td = document.createElement("td");
+          td.appendChild(safeText(student[key]));
+          tr.appendChild(td);
+        }
+        const action = document.createElement("td");
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.type = "button";
+        del.textContent = "Delete";
+        del.addEventListener("click", () => deleteStudent(student.studentId));
+        action.appendChild(del);
+        tr.appendChild(action);
+        rows.appendChild(tr);
+      }
+    }
+    async function loadStudents() {
+      clearMessage();
+      rows.innerHTML = '<tr><td colspan="5" class="empty">Loading students…</td></tr>';
+      try {
+        const data = await request("/students");
+        renderStudents(Array.isArray(data.students) ? data.students : []);
+      } catch (err) {
+        rows.innerHTML = '<tr><td colspan="5" class="empty">Could not load students.</td></tr>';
+        count.textContent = "Load failed";
+        showMessage(err.message + " If this is a CORS error, check API Gateway CORS settings.", "error");
+      }
+    }
+    async function searchStudent() {
+      clearMessage();
+      const id = document.getElementById("searchId").value.trim();
+      if (!id) return loadStudents();
+      try {
+        const student = await request("/students/" + encodeURIComponent(id));
+        renderStudents([student]);
+        showMessage("Student found.");
+      } catch (err) {
+        renderStudents([]);
+        showMessage(err.message, "error");
+      }
+    }
+    async function deleteStudent(id) {
+      if (!confirm(`Delete student ${id}? This cannot be undone.`)) return;
+      clearMessage();
+      try {
+        await request("/students/" + encodeURIComponent(id), { method: "DELETE" });
+        showMessage(`Student ${id} deleted successfully.`);
+        await loadStudents();
+      } catch (err) {
+        showMessage(err.message, "error");
+      }
+    }
+    document.getElementById("saveUrl").addEventListener("click", async () => {
+      const value = apiInput.value.trim().replace(/\/+$/, "");
+      if (!value.startsWith("https://")) {
+        showMessage("Enter a valid HTTPS API Gateway Invoke URL.", "error");
+        return;
+      }
+      apiBase = value;
+      showMessage("API URL set. Loading students…");
+      await loadStudents();
+    });
+    document.getElementById("studentForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearMessage();
+      const button = document.getElementById("addButton");
+      const form = event.currentTarget;
+      const student = Object.fromEntries(new FormData(form).entries());
+      button.disabled = true;
+      try {
+        await request("/students", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(student)
+        });
+        form.reset();
+        showMessage("Student added successfully.");
+        await loadStudents();
+      } catch (err) {
+        showMessage(err.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.getElementById("refreshButton").addEventListener("click", loadStudents);
+    document.getElementById("searchButton").addEventListener("click", searchStudent);
+    document.getElementById("showAllButton").addEventListener("click", () => {
+      document.getElementById("searchId").value = "";
+      loadStudents();
+    });
+  </script>
+</body>
+</html>
